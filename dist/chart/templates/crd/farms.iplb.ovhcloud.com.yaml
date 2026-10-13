@@ -1,0 +1,330 @@
+{{- if .Values.crd.enabled }}
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    {{- if .Values.crd.keep }}
+    "helm.sh/resource-policy": keep
+    {{- end }}
+    controller-gen.kubebuilder.io/version: v0.21.0
+  name: farms.iplb.ovhcloud.com
+spec:
+  group: iplb.ovhcloud.com
+  names:
+    kind: Farm
+    listKind: FarmList
+    plural: farms
+    singular: farm
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.serviceRef.serviceName
+      name: Service
+      type: string
+    - jsonPath: .spec.protocol
+      name: Protocol
+      type: string
+    - jsonPath: .status.farmId
+      name: FarmID
+      type: integer
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Farm is the Schema for the farms API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of Farm
+            properties:
+              balance:
+                description: balance is the load balancing algorithm.
+                enum:
+                - first
+                - leastconn
+                - roundrobin
+                - source
+                - uri
+                type: string
+              displayName:
+                description: |-
+                  displayName is the human-readable name of the farm. It is also used to
+                  adopt a pre-existing farm with the same name. Defaults to the resource
+                  name when empty.
+                type: string
+              port:
+                description: |-
+                  port is the default port backends are reached on when a server does not
+                  specify its own port. 1-65535.
+                maximum: 65535
+                minimum: 1
+                type: integer
+              probe:
+                description: probe configures the health check applied to the farm's
+                  servers.
+                properties:
+                  interval:
+                    description: interval is the probe interval in seconds.
+                    type: integer
+                  match:
+                    description: match is the expected match condition.
+                    type: string
+                  method:
+                    description: method is the HTTP method for http/https probes.
+                    type: string
+                  pattern:
+                    description: pattern is the value compared against using "match".
+                    type: string
+                  port:
+                    description: port is the port to probe. Defaults to the server
+                      port when omitted.
+                    type: integer
+                  type:
+                    description: type is the probe protocol.
+                    enum:
+                    - http
+                    - https
+                    - tcp
+                    - mysql
+                    - pgsql
+                    - smtp
+                    - ssl
+                    - oco
+                    type: string
+                  url:
+                    description: url is the URL to request for http/https probes.
+                    type: string
+                required:
+                - type
+                type: object
+              protocol:
+                description: |-
+                  protocol is the farm protocol. It must match the protocol of any
+                  frontend that targets this farm. UDP farms do not support balance,
+                  stickiness or a probe, nor per-server weight/ssl/backup/probe.
+                enum:
+                - http
+                - tcp
+                - udp
+                type: string
+              servers:
+                description: |-
+                  servers is the declarative list of backend servers in this farm. The
+                  operator creates, updates and deletes server members to match this list.
+                items:
+                  description: FarmServer is a single backend server member of a Farm.
+                  properties:
+                    address:
+                      description: |-
+                        address is the IPv4/IPv6 address of the backend. Used as the unique key
+                        within a farm.
+                      type: string
+                    backup:
+                      description: backup marks the server as a backup, only used
+                        when the active pool is down.
+                      type: boolean
+                    displayName:
+                      description: displayName is the human-readable name of the server.
+                      type: string
+                    port:
+                      description: |-
+                        port is the port the backend is reached on. Falls back to the farm port
+                        when omitted.
+                      maximum: 65535
+                      minimum: 1
+                      type: integer
+                    probe:
+                      description: probe enables the farm probe for this server.
+                      type: boolean
+                    ssl:
+                      description: ssl enables TLS towards the backend.
+                      type: boolean
+                    status:
+                      default: active
+                      description: status enables or disables the backend.
+                      enum:
+                      - active
+                      - inactive
+                      type: string
+                    weight:
+                      description: weight is the relative weight of the backend (0-256).
+                      maximum: 256
+                      minimum: 0
+                      type: integer
+                  required:
+                  - address
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - address
+                x-kubernetes-list-type: map
+              serviceRef:
+                description: serviceRef selects the IPLB service and credentials.
+                properties:
+                  credentialsSecretRef:
+                    description: |-
+                      credentialsSecretRef references a Secret holding the OAuth2 client
+                      credentials. The Secret must contain the keys "clientID" and
+                      "clientSecret".
+                    properties:
+                      name:
+                        description: name is the name of the Secret.
+                        type: string
+                      namespace:
+                        description: |-
+                          namespace is the namespace of the Secret. Defaults to the resource's
+                          namespace when empty.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  endpoint:
+                    default: ovh-eu
+                    description: endpoint is the go-ovh API endpoint to target.
+                    enum:
+                    - ovh-eu
+                    - ovh-ca
+                    - ovh-us
+                    type: string
+                  serviceName:
+                    description: serviceName is the IPLB service identifier, e.g.
+                      "loadbalancer-xxxxxxxx".
+                    type: string
+                required:
+                - credentialsSecretRef
+                - serviceName
+                type: object
+              stickiness:
+                description: stickiness is the session stickiness mode (not valid
+                  for every protocol).
+                enum:
+                - sourceIp
+                - cookie
+                type: string
+              vrackNetworkId:
+                description: vrackNetworkId attaches the farm to a vRack private network.
+                format: int64
+                type: integer
+              zone:
+                description: zone is the balancing zone the farm lives in (e.g. "gra",
+                  "all").
+                type: string
+            required:
+            - protocol
+            - serviceRef
+            type: object
+          status:
+            description: status defines the observed state of Farm
+            properties:
+              conditions:
+                description: |-
+                  conditions represent the current state of the Farm resource.
+                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
+
+                  Standard condition types include:
+                  - "Available": the resource is fully functional
+                  - "Progressing": the resource is being created or updated
+                  - "Degraded": the resource failed to reach or maintain its desired state
+
+                  The status of each condition is one of True, False, or Unknown.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              farmId:
+                description: farmId is the numeric identifier assigned by the OVHcloud
+                  API.
+                format: int64
+                type: integer
+              observedGeneration:
+                description: observedGeneration is the .metadata.generation last reconciled.
+                format: int64
+                type: integer
+              serverIDs:
+                additionalProperties:
+                  format: int64
+                  type: integer
+                description: serverIDs maps each server address to its numeric id
+                  in the OVHcloud API.
+                type: object
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+{{- end }}

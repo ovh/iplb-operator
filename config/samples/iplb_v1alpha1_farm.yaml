@@ -1,0 +1,30 @@
+apiVersion: iplb.ovhcloud.com/v1alpha1
+kind: Farm
+metadata:
+  name: web
+  labels:
+    app.kubernetes.io/name: iplb-operator
+spec:
+  serviceRef:
+    serviceName: loadbalancer-xxxxxxxxxxxxxxxx   # your IPLB service name
+    endpoint: ovh-eu
+    credentialsSecretRef:
+      name: ovh-credentials
+  protocol: http
+  displayName: web
+  balance: roundrobin
+  zone: all
+  probe:
+    type: http
+    method: GET
+    url: /healthz
+    interval: 30
+  servers:
+    - address: 10.0.0.11
+      port: 8080
+      weight: 100
+      status: active
+    - address: 10.0.0.12
+      port: 8080
+      weight: 100
+      status: active

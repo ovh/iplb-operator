@@ -1,0 +1,30 @@
+# A Service of type LoadBalancer opted in to the IPLB operator.
+#
+# The operator creates one Farm + Frontend per TCP port (here: web-80), with
+# the cluster node IPs as backend servers reached on the allocated nodePort,
+# and writes the load balancer's public IP back to .status.loadBalancer.ingress.
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  annotations:
+    # Required: the existing OVHcloud IPLB service and the OAuth2 credentials Secret.
+    iplb.ovhcloud.com/service-name: loadbalancer-xxxxxxxx
+    iplb.ovhcloud.com/credentials-secret: ovh-credentials
+    # Optional tuning:
+    # iplb.ovhcloud.com/endpoint: ovh-eu          # ovh-eu (default), ovh-ca, ovh-us
+    # iplb.ovhcloud.com/zone: all                 # balancing zone for farms/frontends
+    # iplb.ovhcloud.com/protocol: tcp             # force tcp|http for every port
+    # iplb.ovhcloud.com/balance: roundrobin       # farm algorithm
+    # iplb.ovhcloud.com/node-address-type: InternalIP  # InternalIP (default) or ExternalIP
+spec:
+  type: LoadBalancer
+  # Opt in to this operator. Other LoadBalancer controllers ignore it.
+  loadBalancerClass: iplb.ovhcloud.com/iplb
+  selector:
+    app: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP

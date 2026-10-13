@@ -1,0 +1,22 @@
+apiVersion: iplb.ovhcloud.com/v1alpha1
+kind: Frontend
+metadata:
+  name: web-https
+  labels:
+    app.kubernetes.io/name: iplb-operator
+spec:
+  serviceRef:
+    serviceName: loadbalancer-xxxxxxxxxxxxxxxx
+    endpoint: ovh-eu
+    credentialsSecretRef:
+      name: ovh-credentials
+  protocol: http
+  displayName: web-https
+  port: "443"
+  zone: all
+  ssl: true
+  # Reference the Farm custom resource above; its resolved farmId is used as
+  # the default farm. Use defaultFarmId instead to point at a raw OVHcloud id.
+  defaultFarmRef: web
+  allowedSource:
+    - 0.0.0.0/0

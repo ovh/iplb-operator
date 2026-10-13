@@ -1,0 +1,7 @@
+## Append samples of your project ##
+resources:
+- iplb_v1alpha1_farm.yaml
+- iplb_v1alpha1_frontend.yaml
+- iplb_v1alpha1_certificate.yaml
+- core_v1_service_loadbalancer.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

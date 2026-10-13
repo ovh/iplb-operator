@@ -1,0 +1,60 @@
+# Production values for iplb-operator.
+#
+# Self-contained: deploy with
+#   helm upgrade --install iplb-operator ./dist/chart -n iplb-system --create-namespace \
+#     -f dist/chart/values-prod.yaml
+# (no --reuse-values / --set needed). Bump manager.image.tag per release.
+
+manager:
+  image:
+    repository: # The image repository for the iplb-operator manager container.
+
+    tag: "*.*.*" # The image tag for the iplb-operator manager container.
+  # Single replica with leader election (safe to scale up later).
+  replicas: 1
+  args:
+  - --leader-elect
+
+# CRDs installed and kept on uninstall.
+crd:
+  enabled: true
+  keep: true
+
+# Secure metrics (HTTPS + authn/authz), scraped by Prometheus.
+metrics:
+  enabled: true
+  secure: true
+  port: 8443
+  reader:
+    # Bind ServiceAccounts to the metrics-reader ClusterRole so they may scrape
+    # the authenticated /metrics endpoint.
+    enabled: true
+    serviceAccounts:
+    # Prometheus (kube-prometheus-stack) — the actual scraper. Use your own release name
+    - name: kube-prometheus-stack-1782-prometheus
+      namespace: prometheus
+    # The operator's own ServiceAccount — handy for a quick token-based check:
+    #   TOKEN=$(kubectl -n iplb-system create token iplb-operator-controller-manager)
+    #   curl -sk -H "Authorization: Bearer $TOKEN" https://localhost:8443/metrics
+    - name: iplb-operator-controller-manager
+      namespace: iplb-system
+
+# Create the ServiceMonitor so prometheus-operator discovers the metrics service.
+prometheus:
+  enabled: true
+
+# Ship the Grafana dashboard as a ConfigMap (auto-loaded by the kube-prometheus-stack
+# Grafana sidecar, which watches grafana_dashboard=1 in all namespaces).
+grafanaDashboard:
+  enabled: true
+  label: grafana_dashboard
+  value: "1"
+
+# Alerting rules. kube-prometheus-stack only loads PrometheusRules whose labels
+# match its ruleSelector — here it requires release=<stack release>.
+prometheusRule:
+  enabled: true
+  additionalLabels:
+    release: kube-prometheus-stack-1782375986
+  workqueueDepthThreshold: 20
+  reconcileLatencySeconds: 30

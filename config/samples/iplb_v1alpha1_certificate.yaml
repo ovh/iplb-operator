@@ -1,0 +1,17 @@
+apiVersion: iplb.ovhcloud.com/v1alpha1
+kind: Certificate
+metadata:
+  name: web-cert
+  labels:
+    app.kubernetes.io/name: iplb-operator
+spec:
+  serviceRef:
+    serviceName: loadbalancer-xxxxxxxxxxxxxxxx
+    endpoint: ovh-eu
+    credentialsSecretRef:
+      name: ovh-credentials
+  displayName: web-cert
+  # A standard kubernetes.io/tls Secret (keys tls.crt and tls.key). Rotating the
+  # Secret content triggers a replace of the certificate on the load balancer.
+  tlsSecretRef:
+    name: web-tls

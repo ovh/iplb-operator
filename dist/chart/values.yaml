@@ -1,0 +1,220 @@
+## String to partially override chart.fullname template (will maintain the release name)
+##
+# nameOverride: ""
+
+## String to fully override chart.fullname template
+##
+# fullnameOverride: ""
+
+## Configure the controller manager deployment
+##
+manager:
+  ## Set to false to skip manager installation
+  ##
+  enabled: true
+
+  replicas: 1
+
+  image:
+    repository: controller
+    ## Image tag (defaults to Chart.appVersion if not set)
+    ##
+    # tag: ""
+    pullPolicy: IfNotPresent
+
+  ## Arguments
+  ##
+  args:
+    - --leader-elect
+
+  ## Image pull secrets
+  ##
+  # imagePullSecrets:
+  #   - name: myregistrykey
+
+  ## Pod-level security settings
+  ##
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+  ## Container-level security settings
+  ##
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+
+  ## Resource limits and requests
+  ##
+  resources:
+    limits:
+      cpu: 500m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
+
+  ## Manager pod's affinity
+  ##
+  affinity: {}
+
+  ## Manager pod's node selector
+  ##
+  nodeSelector: {}
+
+  ## Manager pod's tolerations
+  ##
+  tolerations: []
+
+  ## Deployment strategy
+  ##
+  # strategy:
+  #   type: RollingUpdate
+  #   rollingUpdate:
+  #     maxSurge: 25%
+  #     maxUnavailable: 25%
+
+  ## Priority class name
+  ##
+  # priorityClassName: ""
+
+  ## Topology spread constraints
+  ##
+  # topologySpreadConstraints: []
+
+  ## Termination grace period seconds
+  ##
+  terminationGracePeriodSeconds: 10
+
+  ## Custom Deployment labels
+  ##
+  # labels: {}
+
+  ## Custom Deployment annotations
+  ##
+  # annotations: {}
+
+  ## Custom Pod labels and annotations
+  ##
+  # pod:
+  #   labels: {}
+  #   annotations: {}
+
+## RBAC configuration
+##
+rbac:
+  ## RBAC resource scope
+  ## - false (default): ClusterRole/ClusterRoleBinding (all namespaces)
+  ## - true: Role/RoleBinding (release namespace only)
+  ##
+  namespaced: false
+
+  ## Helper roles for CRD management (admin/editor/viewer)
+  ##
+  helpers:
+    ## Install convenience admin/editor/viewer roles for CRDs
+    ##
+    enabled: false
+
+## ServiceAccount configuration
+##
+serviceAccount:
+  # Install default ServiceAccount provided
+  enabled: true
+
+  ## Existing ServiceAccount name (only when enabled=false)
+  ## Note: When enabled=true, respects nameOverride/fullnameOverride
+  ##
+  # name: ""
+
+  ## Custom ServiceAccount annotations
+  ##
+  # annotations: {}
+
+  ## Custom ServiceAccount labels
+  ##
+  # labels: {}
+
+## Custom Resource Definitions
+##
+crd:
+  # Install CRDs with the chart
+  enabled: true
+  # Keep CRDs when uninstalling
+  keep: true
+
+## Controller metrics endpoint.
+## Enable to expose /metrics endpoint
+##
+metrics:
+  enabled: true
+  # Metrics server port
+  port: 8443
+  # Enable secure metrics: HTTPS with certs/auth (true) or HTTP (false).
+  # Note: Metrics authn/authz needs ClusterRole access.
+  secure: true
+
+  ## Grant read access to the authenticated /metrics endpoint by binding
+  ## ServiceAccount(s) to the metrics-reader ClusterRole. Only applies when
+  ## metrics.enabled and metrics.secure are true.
+  ##
+  reader:
+    ## Create the ClusterRoleBinding.
+    enabled: false
+    ## ServiceAccounts allowed to scrape /metrics. When empty, the operator's
+    ## own ServiceAccount is bound (handy for a quick token-based check).
+    ## Example (e.g. Prometheus):
+    ##   serviceAccounts:
+    ##     - name: prometheus-k8s
+    ##       namespace: monitoring
+    serviceAccounts: []
+
+## Cert-manager integration for TLS certificates.
+## Required for webhook certificates and metrics endpoint certificates.
+##
+certManager:
+  enabled: false
+
+## Prometheus ServiceMonitor for metrics scraping.
+## Requires prometheus-operator to be installed in the cluster.
+##
+prometheus:
+  enabled: false
+
+## PrometheusRule with alerting rules for the controller.
+## Requires prometheus-operator. Note: prometheus-operator only loads rules whose
+## labels match the Prometheus `ruleSelector` — set additionalLabels accordingly
+## (e.g. kube-prometheus-stack typically requires `release: <stack-release>`).
+##
+prometheusRule:
+  enabled: false
+  additionalLabels: {}
+  # Alert thresholds:
+  workqueueDepthThreshold: 20    # sustained work-queue depth -> backlog alert
+  reconcileLatencySeconds: 30    # p99 reconcile time -> slow-reconcile alert
+
+## Network policies for controlling traffic flow.
+## Enable to restrict ingress to the controller manager.
+##
+networkPolicy:
+  enabled: false
+
+## Grafana dashboard for the controller, shipped as a ConfigMap discovered by the
+## Grafana dashboard sidecar (e.g. kube-prometheus-stack).
+##
+grafanaDashboard:
+  ## Create the dashboard ConfigMap.
+  enabled: false
+  ## Label/value the Grafana sidecar watches (kube-prometheus-stack default below).
+  label: grafana_dashboard
+  value: "1"
+  ## Namespace for the ConfigMap. Defaults to the release namespace; set this to
+  ## the namespace the sidecar searches if it does not watch all namespaces.
+  # namespace: ""
+  ## Optional Grafana folder to file the dashboard under.
+  folder: ""
+

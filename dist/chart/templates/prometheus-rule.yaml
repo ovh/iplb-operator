@@ -1,0 +1,66 @@
+{{- if .Values.prometheusRule.enabled }}
+{{- $job := include "iplb-operator.resourceName" (dict "suffix" "controller-manager-metrics-service" "context" $) }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "iplb-operator.resourceName" (dict "suffix" "alerts" "context" $) }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ include "iplb-operator.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- with .Values.prometheusRule.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: iplb-operator.rules
+      rules:
+        - alert: IPLBOperatorDown
+          expr: absent(up{job="{{ $job }}"} == 1)
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: IPLB operator has no healthy instance
+            description: No iplb-operator metrics target has been up for 5m (job {{ $job }}); reconciliation is stopped.
+        - alert: IPLBOperatorNoLeader
+          expr: max(leader_election_master_status{job="{{ $job }}"}) == 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: IPLB operator has no leader
+            description: No replica has held leadership for 10m; reconciliation and the IPLB refresh are stalled.
+        - alert: IPLBOperatorReconcileErrors
+          expr: sum by (controller) (rate(controller_runtime_reconcile_errors_total{job="{{ $job }}"}[5m])) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: IPLB operator controller {{`{{ $labels.controller }}`}} is erroring
+            description: Controller {{`{{ $labels.controller }}`}} has returned reconcile errors for 15m. Terminal configuration errors are surfaced on the resource and are NOT counted here, so this indicates transient/unexpected failures.
+        - alert: IPLBOperatorWorkqueueBacklog
+          expr: sum by (name) (workqueue_depth{job="{{ $job }}"}) > {{ .Values.prometheusRule.workqueueDepthThreshold }}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: IPLB operator work queue {{`{{ $labels.name }}`}} is backing up
+            description: Work queue {{`{{ $labels.name }}`}} depth has been above {{ .Values.prometheusRule.workqueueDepthThreshold }} for 10m; reconciliation is falling behind.
+        - alert: IPLBOperatorReconcileLatencyHigh
+          expr: histogram_quantile(0.99, sum by (controller, le) (rate(controller_runtime_reconcile_time_seconds_bucket{job="{{ $job }}"}[5m]))) > {{ .Values.prometheusRule.reconcileLatencySeconds }}
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: IPLB operator reconciles are slow ({{`{{ $labels.controller }}`}})
+            description: p99 reconcile time for controller {{`{{ $labels.controller }}`}} has been above {{ .Values.prometheusRule.reconcileLatencySeconds }}s for 15m.
+        - alert: IPLBOperatorRestarting
+          expr: increase(kube_pod_container_status_restarts_total{namespace="{{ .Release.Namespace }}", container="manager"}[15m]) > 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: IPLB operator is restarting
+            description: The iplb-operator manager container has restarted more than twice in 15m.
+{{- end }}

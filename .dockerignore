@@ -1,0 +1,20 @@
+# More info: https://docs.docker.com/engine/reference/builder/#dockerignore-file
+# Ignore everything by default and re-include only needed files
+**
+
+# Re-include Go source files (but not *_test.go)
+!**/*.go
+**/*_test.go
+
+# Re-include Go module files
+!go.mod
+!go.sum
+
+# Never ship the vendored tree into the build context. The `!**/*.go` rule above
+# would otherwise pull vendor/**/*.go back in without vendor/modules.txt, so
+# `go build` enters vendor mode with an incomplete vendor dir and fails with
+# "inconsistent vendoring in /workspace". The image resolves modules via
+# `go mod download` instead. `vendor/**` is required (not just `vendor`) to
+# override the per-file .go re-include for nested paths.
+vendor
+vendor/**

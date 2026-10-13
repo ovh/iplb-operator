@@ -1,0 +1,69 @@
+apiVersion: rbac.authorization.k8s.io/v1
+{{- if .Values.rbac.namespaced }}
+kind: Role
+{{- else }}
+kind: ClusterRole
+{{- end }}
+metadata:
+{{- if .Values.rbac.namespaced }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
+  name: {{ include "iplb-operator.resourceName" (dict "suffix" "manager-role" "context" $) }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  - secrets
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - iplb.ovhcloud.com
+  resources:
+  - certificates
+  - farms
+  - frontends
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - iplb.ovhcloud.com
+  resources:
+  - certificates/finalizers
+  - farms/finalizers
+  - frontends/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - iplb.ovhcloud.com
+  resources:
+  - certificates/status
+  - farms/status
+  - frontends/status
+  verbs:
+  - get
+  - patch
+  - update

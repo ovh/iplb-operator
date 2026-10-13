@@ -1,0 +1,22 @@
+{{- if and .Values.metrics.enabled .Values.metrics.secure .Values.metrics.reader.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "iplb-operator.resourceName" (dict "suffix" "metrics-reader-rolebinding" "context" $) }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "iplb-operator.resourceName" (dict "suffix" "metrics-reader" "context" $) }}
+subjects:
+{{- if .Values.metrics.reader.serviceAccounts }}
+{{- range .Values.metrics.reader.serviceAccounts }}
+- kind: ServiceAccount
+  name: {{ .name }}
+  namespace: {{ .namespace | default $.Release.Namespace }}
+{{- end }}
+{{- else }}
+- kind: ServiceAccount
+  name: {{ include "iplb-operator.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,18 @@
+{{- if .Values.grafanaDashboard.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "iplb-operator.resourceName" (dict "suffix" "grafana-dashboard" "context" $) }}
+  namespace: {{ default .Release.Namespace .Values.grafanaDashboard.namespace }}
+  labels:
+    {{ .Values.grafanaDashboard.label }}: {{ .Values.grafanaDashboard.value | quote }}
+    app.kubernetes.io/name: {{ include "iplb-operator.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  {{- with .Values.grafanaDashboard.folder }}
+  annotations:
+    grafana_folder: {{ . | quote }}
+  {{- end }}
+data:
+  iplb-operator-dashboard.json: |-
+{{ .Files.Get "dashboards/iplb-operator-dashboard.json" | indent 4 }}
+{{- end }}
