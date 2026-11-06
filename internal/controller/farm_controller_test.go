@@ -86,7 +86,7 @@ func reconcileUntilStable(t *testing.T, r *FarmReconciler, key types.NamespacedN
 		if err != nil {
 			t.Fatalf("reconcile: %v", err)
 		}
-		if !res.Requeue && res.RequeueAfter == 0 {
+		if res.RequeueAfter == 0 {
 			return
 		}
 	}

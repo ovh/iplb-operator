@@ -52,6 +52,14 @@ const requeueFreeCert = 30 * time.Second
 // such errors need a spec/permission fix, so retrying fast only spams logs.
 const requeueTerminal = 2 * time.Minute
 
+// requeueRecreate is how soon to retry after forgetting an IPLB object that
+// vanished on the API side, so the next pass recreates it.
+const requeueRecreate = time.Second
+
+// eventActionReconcile is the action recorded on the events the controllers
+// emit; the events.k8s.io API requires one alongside the reason.
+const eventActionReconcile = "Reconcile"
+
 // isNotFound reports whether err is an OVHcloud API 404. Used to make deletes
 // idempotent (an already-gone object is success).
 func isNotFound(err error) bool {
@@ -103,13 +111,6 @@ func setReady(conds *[]metav1.Condition, generation int64, status metav1.Conditi
 func intp(v int) *int       { return &v }
 func boolp(v bool) *bool    { return &v }
 func int64p(v int64) *int64 { return &v }
-
-func intVal(p *int) int {
-	if p == nil {
-		return 0
-	}
-	return *p
-}
 
 func intpEqual(a, b *int) bool {
 	if a == nil || b == nil {

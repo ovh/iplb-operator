@@ -30,7 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -127,13 +127,13 @@ type ServiceReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Factory  ovhclient.Factory
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 }
 
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=services/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
-// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=iplb.ovhcloud.com,resources=farms;frontends;certificates,verbs=get;list;watch;create;update;patch;delete
 
 func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -156,7 +156,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	ref, err := serviceRefFromAnnotations(&svc)
 	if err != nil {
-		r.Recorder.Event(&svc, corev1.EventTypeWarning, "InvalidConfiguration", err.Error())
+		r.Recorder.Eventf(&svc, nil, corev1.EventTypeWarning, "InvalidConfiguration", eventActionReconcile, "%s", err.Error())
 		// A spec/annotation fix re-triggers reconciliation; no point requeueing.
 		return ctrl.Result{}, nil
 	}
@@ -166,7 +166,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 	if len(addrs) == 0 {
-		r.Recorder.Event(&svc, corev1.EventTypeWarning, "NoBackends",
+		r.Recorder.Eventf(&svc, nil, corev1.EventTypeWarning, "NoBackends", eventActionReconcile,
 			"No ready node addresses found for the selected node-address-type")
 	}
 
@@ -179,7 +179,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	ip := svc.Annotations[AnnIP]
 	vrackNetworkID, err := parseVrackNetworkID(&svc)
 	if err != nil {
-		r.Recorder.Event(&svc, corev1.EventTypeWarning, "InvalidConfiguration", err.Error())
+		r.Recorder.Eventf(&svc, nil, corev1.EventTypeWarning, "InvalidConfiguration", eventActionReconcile, "%s", err.Error())
 		return ctrl.Result{}, nil
 	}
 
@@ -193,8 +193,8 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		if needInfo {
 			info, err := s.GetInfo()
 			if err != nil {
-				r.Recorder.Event(&svc, corev1.EventTypeWarning, "LookupFailed",
-					fmt.Sprintf("Could not read load balancer %q: %v", ref.ServiceName, err))
+				r.Recorder.Eventf(&svc, nil, corev1.EventTypeWarning, "LookupFailed", eventActionReconcile,
+					"Could not read load balancer %q: %v", ref.ServiceName, err)
 				return ctrl.Result{RequeueAfter: requeuePending}, nil
 			}
 			if zone == "" {
@@ -204,7 +204,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				case 0:
 					// No zone advertised; let the API decide.
 				default:
-					r.Recorder.Eventf(&svc, corev1.EventTypeWarning, "ZoneRequired",
+					r.Recorder.Eventf(&svc, nil, corev1.EventTypeWarning, "ZoneRequired", eventActionReconcile,
 						"Load balancer %q has multiple zones (%s); set the %s annotation to pick one",
 						ref.ServiceName, strings.Join(info.Zone, ", "), AnnZone)
 					return ctrl.Result{RequeueAfter: requeuePending}, nil
@@ -217,8 +217,8 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		if needVrack {
 			ids, err := s.ListVrackNetworks()
 			if err != nil {
-				r.Recorder.Event(&svc, corev1.EventTypeWarning, "LookupFailed",
-					fmt.Sprintf("Could not list vRack networks of %q: %v", ref.ServiceName, err))
+				r.Recorder.Eventf(&svc, nil, corev1.EventTypeWarning, "LookupFailed", eventActionReconcile,
+					"Could not list vRack networks of %q: %v", ref.ServiceName, err)
 				return ctrl.Result{RequeueAfter: requeuePending}, nil
 			}
 			switch len(ids) {
@@ -228,7 +228,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				// Not a vRack service (or none configured yet); leave unset. If the
 				// LB is in a vRack, the farm create surfaces a clear error.
 			default:
-				r.Recorder.Eventf(&svc, corev1.EventTypeWarning, "VrackNetworkRequired",
+				r.Recorder.Eventf(&svc, nil, corev1.EventTypeWarning, "VrackNetworkRequired", eventActionReconcile,
 					"Load balancer %q has multiple vRack networks; set the %s annotation to pick one",
 					ref.ServiceName, AnnVrackNetworkID)
 				return ctrl.Result{RequeueAfter: requeuePending}, nil
@@ -241,18 +241,18 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	stickiness := stickinessFor(&svc)
 	probe, err := buildHealthCheck(&svc)
 	if err != nil {
-		r.Recorder.Event(&svc, corev1.EventTypeWarning, "InvalidConfiguration", err.Error())
+		r.Recorder.Eventf(&svc, nil, corev1.EventTypeWarning, "InvalidConfiguration", eventActionReconcile, "%s", err.Error())
 		return ctrl.Result{}, nil
 	}
 	serverCfg, err := buildServerConfig(&svc, probe != nil)
 	if err != nil {
-		r.Recorder.Event(&svc, corev1.EventTypeWarning, "InvalidConfiguration", err.Error())
+		r.Recorder.Eventf(&svc, nil, corev1.EventTypeWarning, "InvalidConfiguration", eventActionReconcile, "%s", err.Error())
 		return ctrl.Result{}, nil
 	}
 
 	// OVHcloud frontends accept an allow-list or a deny-list, not both.
 	if len(svc.Spec.LoadBalancerSourceRanges) > 0 && svc.Annotations[AnnDeniedSource] != "" {
-		r.Recorder.Eventf(&svc, corev1.EventTypeWarning, "InvalidConfiguration",
+		r.Recorder.Eventf(&svc, nil, corev1.EventTypeWarning, "InvalidConfiguration", eventActionReconcile,
 			"loadBalancerSourceRanges (allow-list) and the %s annotation (deny-list) are mutually exclusive; set only one",
 			AnnDeniedSource)
 		return ctrl.Result{}, nil
@@ -264,7 +264,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if free, _ := parseBoolAnnotation(&svc, AnnTLSFreeCertificate); free != nil && *free {
 		hosts := splitHosts(svc.Annotations[AnnTLSHost])
 		if len(hosts) == 0 {
-			r.Recorder.Eventf(&svc, corev1.EventTypeWarning, "InvalidConfiguration",
+			r.Recorder.Eventf(&svc, nil, corev1.EventTypeWarning, "InvalidConfiguration", eventActionReconcile,
 				"%s requires %s to be set with at least one FQDN", AnnTLSFreeCertificate, AnnTLSHost)
 			return ctrl.Result{}, nil
 		}
@@ -279,7 +279,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	keep := make([]string, 0, len(svc.Spec.Ports))
 	for _, p := range svc.Spec.Ports {
 		if p.Protocol != corev1.ProtocolTCP && p.Protocol != corev1.ProtocolUDP {
-			r.Recorder.Eventf(&svc, corev1.EventTypeWarning, "UnsupportedProtocol",
+			r.Recorder.Eventf(&svc, nil, corev1.EventTypeWarning, "UnsupportedProtocol", eventActionReconcile,
 				"Skipping port %d: only TCP and UDP are supported by the IPLB operator", p.Port)
 			continue
 		}

@@ -26,7 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -44,7 +44,7 @@ type FrontendReconciler struct {
 	Scheme   *runtime.Scheme
 	Factory  ovhclient.Factory
 	Refresh  *refresh.Coordinator
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=iplb.ovhcloud.com,resources=frontends,verbs=get;list;watch;create;update;patch;delete
@@ -75,7 +75,6 @@ func (r *FrontendReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if err := r.Update(ctx, &fe); err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{Requeue: true}, nil
 	}
 
 	// Reject spec combinations the OVHcloud API forbids, before any API call, so
@@ -83,7 +82,7 @@ func (r *FrontendReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err := validateFrontendSpec(&fe); err != nil {
 		setReady(&fe.Status.Conditions, fe.Generation, metav1.ConditionFalse, iplbv1alpha1.ReasonError, err.Error())
 		if r.Recorder != nil {
-			r.Recorder.Event(&fe, corev1.EventTypeWarning, "InvalidConfiguration", err.Error())
+			r.Recorder.Eventf(&fe, nil, corev1.EventTypeWarning, "InvalidConfiguration", eventActionReconcile, "%s", err.Error())
 		}
 		// A spec fix re-triggers reconciliation; no point requeueing.
 		return ctrl.Result{}, r.Status().Update(ctx, &fe)
@@ -139,7 +138,7 @@ func (r *FrontendReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			if err := r.Status().Update(ctx, &fe); err != nil {
 				return ctrl.Result{}, err
 			}
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: requeueRecreate}, nil
 		}
 		if err != nil {
 			return r.fail(ctx, &fe, fmt.Errorf("getting frontend %d: %w", *fe.Status.FrontendID, err))
@@ -299,7 +298,7 @@ func (r *FrontendReconciler) fail(ctx context.Context, fe *iplbv1alpha1.Frontend
 		// A 4xx will keep failing until the spec/permissions change. Surface it
 		// on status and via an Event, and back off instead of hot-looping.
 		if r.Recorder != nil {
-			r.Recorder.Event(fe, corev1.EventTypeWarning, "ConfigurationError", err.Error())
+			r.Recorder.Eventf(fe, nil, corev1.EventTypeWarning, "ConfigurationError", eventActionReconcile, "%s", err.Error())
 		}
 		logf.FromContext(ctx).Info("OVHcloud API rejected the request; retrying slowly until reconfigured",
 			"error", err.Error())
