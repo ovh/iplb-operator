@@ -1,2 +1,7 @@
 .DS_Store
 **/.DS_Store
+# Go modules are resolved from the proxy, not vendored
+vendor/
+
+# Tool binaries installed by the Makefile
+bin/

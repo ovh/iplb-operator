@@ -23,7 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -79,7 +79,7 @@ func newServiceReconciler(t *testing.T, objs ...client.Object) (*ServiceReconcil
 	factory := ovhclient.NewFactoryWithBuilder(k8s, func(_, _, _ string) (ovhclient.Client, error) {
 		return fakeAPI, nil
 	})
-	r := &ServiceReconciler{Client: k8s, Scheme: s, Factory: factory, Recorder: record.NewFakeRecorder(32)}
+	r := &ServiceReconciler{Client: k8s, Scheme: s, Factory: factory, Recorder: events.NewFakeRecorder(32)}
 	return r, k8s, fakeAPI
 }
 

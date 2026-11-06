@@ -27,7 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -45,7 +45,7 @@ type CertificateReconciler struct {
 	Scheme   *runtime.Scheme
 	Factory  ovhclient.Factory
 	Refresh  *refresh.Coordinator
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=iplb.ovhcloud.com,resources=certificates,verbs=get;list;watch;create;update;patch;delete
@@ -75,7 +75,6 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		if err := r.Update(ctx, &cert); err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{Requeue: true}, nil
 	}
 
 	// Free (Let's Encrypt) certificate mode is handled separately: there is no
@@ -200,7 +199,7 @@ func (r *CertificateReconciler) reconcileFreeCertificate(ctx context.Context, ce
 		}
 		cert.Status.FreeCertificateRequested = true
 		if r.Recorder != nil {
-			r.Recorder.Eventf(cert, corev1.EventTypeNormal, "FreeCertificateRequested",
+			r.Recorder.Eventf(cert, nil, corev1.EventTypeNormal, "FreeCertificateRequested", eventActionReconcile,
 				"Requested Let's Encrypt certificate for %v", fqdns)
 		}
 		log.Info("requested free certificate", "fqdn", fqdns)
@@ -307,7 +306,7 @@ func (r *CertificateReconciler) fail(ctx context.Context, cert *iplbv1alpha1.Cer
 		// A 4xx will keep failing until the spec/permissions change. Surface it
 		// on status and via an Event, and back off instead of hot-looping.
 		if r.Recorder != nil {
-			r.Recorder.Event(cert, corev1.EventTypeWarning, "ConfigurationError", err.Error())
+			r.Recorder.Eventf(cert, nil, corev1.EventTypeWarning, "ConfigurationError", eventActionReconcile, "%s", err.Error())
 		}
 		logf.FromContext(ctx).Info("OVHcloud API rejected the request; retrying slowly until reconfigured",
 			"error", err.Error())

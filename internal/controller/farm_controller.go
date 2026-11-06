@@ -23,7 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -41,7 +41,7 @@ type FarmReconciler struct {
 	Scheme   *runtime.Scheme
 	Factory  ovhclient.Factory
 	Refresh  *refresh.Coordinator
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=iplb.ovhcloud.com,resources=farms,verbs=get;list;watch;create;update;patch;delete
@@ -74,7 +74,6 @@ func (r *FarmReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		if err := r.Update(ctx, &farm); err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{Requeue: true}, nil
 	}
 
 	proto := farm.Spec.Protocol
@@ -100,7 +99,7 @@ func (r *FarmReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 			if err := r.Status().Update(ctx, &farm); err != nil {
 				return ctrl.Result{}, err
 			}
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: requeueRecreate}, nil
 		}
 		if err != nil {
 			return r.fail(ctx, &farm, fmt.Errorf("getting farm %d: %w", *farm.Status.FarmID, err))
@@ -289,7 +288,7 @@ func (r *FarmReconciler) fail(ctx context.Context, farm *iplbv1alpha1.Farm, err 
 		// A 4xx will keep failing until the spec/permissions change. Surface it
 		// on status and via an Event, and back off instead of hot-looping.
 		if r.Recorder != nil {
-			r.Recorder.Event(farm, corev1.EventTypeWarning, "ConfigurationError", err.Error())
+			r.Recorder.Eventf(farm, nil, corev1.EventTypeWarning, "ConfigurationError", eventActionReconcile, "%s", err.Error())
 		}
 		logf.FromContext(ctx).Info("OVHcloud API rejected the request; retrying slowly until reconfigured",
 			"error", err.Error())

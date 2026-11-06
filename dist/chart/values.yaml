@@ -16,7 +16,7 @@ manager:
   replicas: 1
 
   image:
-    repository: controller
+    repository: ovhcom/iplb-operator
     ## Image tag (defaults to Chart.appVersion if not set)
     ##
     # tag: ""

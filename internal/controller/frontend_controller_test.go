@@ -23,7 +23,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -42,7 +42,7 @@ func reconcileFrontendUntilStable(t *testing.T, r *FrontendReconciler, key types
 		if err != nil {
 			t.Fatalf("reconcile: %v", err)
 		}
-		if !res.Requeue && res.RequeueAfter == 0 {
+		if res.RequeueAfter == 0 {
 			return
 		}
 	}
@@ -181,7 +181,7 @@ func TestFrontendReconcile_RejectsAllowAndDeny(t *testing.T) {
 	fe.Spec.DeniedSource = []string{"10.1.2.0/24"}
 
 	r, k8s, fakeAPI := newFrontendReconciler(t, credentialsSecret(), fe)
-	r.Recorder = record.NewFakeRecorder(8)
+	r.Recorder = events.NewFakeRecorder(8)
 	key := types.NamespacedName{Name: "fe", Namespace: "default"}
 
 	// Drives through finalizer-add then the validation rejection (no hot-loop).

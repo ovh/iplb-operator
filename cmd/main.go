@@ -198,7 +198,7 @@ func main() {
 		Scheme:   mgr.GetScheme(),
 		Factory:  factory,
 		Refresh:  refreshCoordinator,
-		Recorder: mgr.GetEventRecorderFor("farm-controller"),
+		Recorder: mgr.GetEventRecorder("farm-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "farm")
 		os.Exit(1)
@@ -208,7 +208,7 @@ func main() {
 		Scheme:   mgr.GetScheme(),
 		Factory:  factory,
 		Refresh:  refreshCoordinator,
-		Recorder: mgr.GetEventRecorderFor("frontend-controller"),
+		Recorder: mgr.GetEventRecorder("frontend-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "frontend")
 		os.Exit(1)
@@ -218,7 +218,7 @@ func main() {
 		Scheme:   mgr.GetScheme(),
 		Factory:  factory,
 		Refresh:  refreshCoordinator,
-		Recorder: mgr.GetEventRecorderFor("certificate-controller"),
+		Recorder: mgr.GetEventRecorder("certificate-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "certificate")
 		os.Exit(1)
@@ -227,7 +227,7 @@ func main() {
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Factory:  factory,
-		Recorder: mgr.GetEventRecorderFor("service-controller"),
+		Recorder: mgr.GetEventRecorder("service-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "service")
 		os.Exit(1)
