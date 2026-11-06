@@ -1,0 +1,84 @@
+name: Build
+on: [push]
+
+integrations: [artifactory-proserv-cicd]
+
+# Release runs on tags, or on any other ref once someone approves the gate.
+gates:
+  manual:
+    if: ${{ success() && (git.ref_type == 'tag' || gate.approve) }}
+    inputs:
+      approve:
+        type: boolean
+
+jobs:
+  # default-vm carries no Go toolchain, so the Go jobs run on the Go model.
+  # go-1-27, not go-1-26: the Makefile tools (kustomize 5.8.3) need Go 1.27,
+  # and the worker image pins GOTOOLCHAIN=local.
+  Test:
+    runs-on: library/go-1-27
+    steps:
+      - uses: actions/checkout
+      # On the worker, `go install .../tools/setup-envtest@<version>` (run by
+      # make test) resolves to controller-runtime itself and fails. Resolving
+      # the nested module first through the public proxy puts it in the module
+      # cache, after which the install succeeds.
+      - run: |
+          #!/bin/bash
+          set -e
+          v=$(go list -m -f '{{.Version}}' sigs.k8s.io/controller-runtime)
+          GOPROXY=https://proxy.golang.org go list -m \
+            sigs.k8s.io/controller-runtime/tools/setup-envtest@"$v"
+          make test
+
+  Lint:
+    runs-on: library/go-1-27
+    steps:
+      - uses: actions/checkout
+      - run: make lint
+
+  # Docker needs a daemon, which the container models do not provide.
+  Docker:
+    runs-on: library/default-vm
+    steps:
+      - uses: actions/checkout
+      - run: docker build -t iplb-operator .
+      - uses: actions/dockerPush
+        with:
+          image: "iplb-operator"
+          tags: "${{ git.semver_current }}"
+
+  # appVersion follows the image tag, which the chart uses by default.
+  Helm:
+    runs-on: library/default-vm
+    steps:
+      - uses: actions/checkout
+      - uses: actions/helmPush
+        with:
+          chartFolder: ./dist/chart
+          chartVersion: "${{ git.semver_current }}"
+          appVersion: "${{ git.semver_current }}"
+
+  # Single-file install pinned to this version's image. build-installer needs
+  # Go (it installs kustomize and controller-gen), so it cannot run in Release.
+  Installer:
+    runs-on: library/go-1-27
+    steps:
+      - uses: actions/checkout
+      - run: make build-installer IMG=ovhcom/iplb-operator:${{ git.semver_current }}
+      - uses: actions/uploadArtifact
+        with:
+          path: dist/install.yaml
+          if-no-files-found: error
+
+  Release:
+    runs-on: library/default-container
+    needs: [Test, Lint, Docker, Helm, Installer]
+    gate: manual
+    steps:
+      - uses: actions/artifactoryRelease
+        with:
+          artifacts: |
+            docker:**/iplb-operator:${{ git.semver_current }}
+            helm:*
+            install.yaml

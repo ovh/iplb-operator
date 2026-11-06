@@ -1,0 +1,7 @@
+name: renovate
+from: library/renovate
+parameters:
+  artifactory_integration: artifactory-proserv-cicd
+on:
+  schedule:
+  - cron: "0 1 * * 2"
